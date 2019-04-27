@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>&gt; QuickCode</title>
+		<meta name='twitter:card' content='summary' />
+		<meta name='twitter:site' content='nothackerdev' />
+		<meta name='twitter:title' content='QuickCode' />
+		<meta name='twitter:description' content='Run JS Quickly (Ctrl+Enter)' />
+		<meta name='twitter:image' content='icon.png' />
+		<link rel='shortcut icon' href='icon.png' />
+		<link rel='apple-touch-icon' href='icon.png' />
+		<link rel='touch-icon' href='icon.png' />
+		<link rel='favicon' href='icon.png' />
+		<link rel='icon' href='icon.png' />
+		<style>
+			html {
+				background-color: #000F;
+				background-image: url(https://9to5mac.com/wp-content/uploads/sites/6/2018/06/mojave-night.jpg);
+				background-size: 100vw 100vh;
+			}
+			.window {
+				background-color: #0008;
+				height: 60vh;
+				overflow-y: scroll;
+				padding: 5vh 5vw;
+				position: fixed;
+				width: 35vw;
+				z-index: 10;
+				transition-duration: 0.05s;
+				resize: vertical;
+			}
+			.window.small {
+				height: 20vh;
+				padding: 1vh 5vw;
+			}
+			.window:nth-of-type(3n+0) {
+				color: #03FF;
+			}
+			.window:nth-of-type(3n+1) {
+				color: #F30F;
+			}
+			.window:nth-of-type(3n+2) {
+				color: #3F0F;
+			}
+			.window:focus {
+				z-index: 999;
+			}
+			.window.bottom {
+				bottom: 0;
+				height: 5vh;
+				left: 0;
+				width: 90vw;
+			}
+			.battery {
+				background-color: #8888;
+				bottom: 8px;
+				border: solid 1px #FFFF;
+				position: fixed;
+				right: 8px;
+				opacity: 0.3;
+				transition-delay: 0.30s;
+				transition-duration: 1.00s;
+				display: block;
+				overflow: hidden;
+				resize: both;
+			}
+			.battery:hover {
+				opacity: 1.0;
+			}
+		</style>
+		<script>
+			(function(self) {
+				"use strict";
+				// Don't nodejs please
+				if(typeof window === 'undefined')
+					return;
+				// Create windows
+				var mouseX = 0, mouseY = 0, windows = [], DraggableTextarea = function(name) {
+					this.elem = self.document.createElement('textarea');
+					this.elem.classList.add('window');
+					this.elem.placeholder = 'Code here...';
+					this.savedJson = null;
+					this.complete = true;
+					if(typeof localStorage !== 'undefined') {
+						var saved = localStorage.getItem(name);
+						if(typeof saved === 'string') {
+							try {
+								this.savedJson = JSON.parse(saved);
+							} catch(e) {
+								console.warn('Invalid JSON for `' + name + '`, data loss or corruption?');
+							}
+							if(this.savedJson !== null) {
+								this.complete = false;
+								var str = atob(this.savedJson.value), i = 0, s = this;
+								s.elem.value = '';
+								s.elem.style.left = this.savedJson.x;
+								s.elem.style.top = this.savedJson.y;
+								s.elem.style.height = this.savedJson.height;
+								if(this.savedJson.small)
+									s.elem.classList.add('small');
+								function addLetter() {
+									s.elem.value += str.charAt(i);
+									i ++;
+									if(i < str.length)
+										requestAnimationFrame(addLetter);
+									else 
+										s.complete = true;
+								}
+								addLetter();
+							}
+						}
+					};
+					this.elem.id = name;
+					this.dragInf = {
+						'isDragging': false,
+						'dragInfo': {
+							'initX': null,
+							'initY': null,
+							'locX': null,
+							'locY': null
+						}
+					};
+					var s = this, mouseDown = function(pageX, pageY) {
+						s.dragInf.isDragging = true;
+						s.dragInf.dragInfo.initX = pageX;
+						s.dragInf.dragInfo.initY = pageY;
+						s.dragInf.dragInfo.locX = Number.parseInt(
+							s.elem.style.left.match(/([0-9]|-|\.)/g).join('')
+						);
+						s.dragInf.dragInfo.locY = Number.parseInt(
+							s.elem.style.top.match(/([0-9]|-|\.)/g).join('')
+						);
+					}, mouseUp = function() {
+						s.dragInf.isDragging = false;
+						s.dragInf.dragInfo.initX = null;
+						s.dragInf.dragInfo.initY = null;
+						s.dragInf.dragInfo.locX = null;
+						s.dragInf.dragInfo.locY = null;
+					};
+					s.elem.addEventListener('contextmenu', function(e) {
+						e.preventDefault();
+						s.elem.classList.toggle('small');
+					});
+					s.elem.addEventListener('mousedown', function(e) {
+						if(e.ctrlKey) {
+							return;
+						};
+						s.elem.focus();
+						mouseDown(e.pageX, e.pageY);
+					});
+					s.elem.addEventListener('touchstart', function(e) {
+						e.preventDefault();
+						s.elem.focus();
+						mouseDown(e.changedTouches[0].pageX, e.changedTouches[0].pageY);
+					});
+					self.addEventListener('mouseup', function(e) {
+						e.preventDefault();
+						mouseUp(e.pageX, e.pageY);
+					});
+					self.addEventListener('touchend', function(e) {
+						e.preventDefault();
+						mouseUp(e.changedTouches[0].pageX, e.changedTouches[0].pageY);
+					});
+					s.elem.addEventListener('keydown', function(e) {
+						if(!e.ctrlKey)
+							return;
+						var keyCode = 'which' in e ? e.which : e.keyCode;
+						switch(keyCode) {
+							case 83: 
+								e.preventDefault();
+								s.forceSave();
+								break;
+							case 13:
+								e.preventDefault();
+								var ret, col;
+								try {
+									col = '#3F0';
+									((function() {
+										ret = JSON.stringify(eval(s.elem.value));
+									}).bind(self))();
+								} catch(err) {
+									ret = err;
+									col = '#F30';
+								}
+								var oldOne = document.querySelector('.bottom'),
+									textarea = document.createElement('textarea');
+								if(oldOne !== null)
+									document.body.removeChild(oldOne);
+								textarea.classList.add('window');
+								textarea.classList.add('bottom');
+								textarea.value = ret;
+								document.body.appendChild(textarea);
+								setTimeout(function() {
+									textarea.style.transition = '1.5s opacity';
+									textarea.style.opacity = '0';
+								}, 5000);
+								setTimeout(function() {
+									document.body.removeChild(textarea);
+								}, 7500);
+								break;
+							default:
+								return;
+						}
+					});
+				}
+				DraggableTextarea.prototype.show = function(elem) {
+					elem.appendChild(this.elem);
+				};
+				DraggableTextarea.prototype.move = function(mouseX, mouseY) {
+					this.elem.style.top = (mouseY - this.dragInf.dragInfo.initY
+											+ this.dragInf.dragInfo.locY) + 'px';
+					this.elem.style.left = (mouseX - this.dragInf.dragInfo.initX
+											+ this.dragInf.dragInfo.locX) + 'px';
+				};
+				DraggableTextarea.prototype.doUpdate = function(mouseX, mouseY) {
+					if(!this.dragInf.isDragging)
+						return;
+					this.move(mouseX, mouseY);
+				};
+				DraggableTextarea.prototype.forceSave = function() {
+					var s = this;
+					if(!this.complete)
+						return;
+					localStorage.setItem(s.elem.id, JSON.stringify({
+						'value': btoa(s.elem.value),
+						'x': s.elem.style.left,
+						'y': s.elem.style.top,
+						'small': s.elem.classList.contains('small'),
+						'height': window.getComputedStyle(s.elem).height
+					}));
+				};
+				self.addEventListener('mousedown', function(e) {
+					mouseX = e.pageX;
+					mouseY = e.pageY;
+				});
+				self.addEventListener('touchstart', function(e) {
+					mouseX = e.changedTouches[0].pageX;
+					mouseY = e.changedTouches[0].pageY;
+				});
+				self.addEventListener('mousemove', function(e) {
+					e.preventDefault();
+					mouseX = e.pageX;
+					mouseY = e.pageY;
+				});
+				self.addEventListener('touchmove', function(e) {
+					e.preventDefault();
+					mouseX = e.changedTouches[0].pageX;
+					mouseY = e.changedTouches[0].pageY;
+				});
+				var doDragCheck = function() {
+					for(var i = 0; i < windows.length; i++) 
+						windows[i].doUpdate(mouseX, mouseY);
+					requestAnimationFrame(doDragCheck);
+				};
+				// Add battery
+				if('navigator' in self && 'getBattery' in self.navigator) {
+					var canvas = self.document.createElement('canvas'),
+						context = canvas.getContext('2d');
+					canvas.width = 256;
+					canvas.height = 96;
+					canvas.classList.add('battery');
+					navigator.getBattery().then(function(battery) {
+						var getColor = function(percent) {
+							return '#' + 
+								Math.floor(0xF - 0xF * battery.level).toString(16) +
+								Math.floor(0xF * battery.level).toString(16) + 
+								Math.floor(0x3 * battery.level).toString(16);
+						}, updateBattery = function() {
+							var p = Math.floor(battery.level * 100) + '%',
+								fsize = Math.floor(canvas.height * 0.375),
+								now = new Date();
+							context.clearRect(0, 0, 
+											canvas.width, canvas.height);
+							context.fillStyle = getColor(battery.level);
+							context.fillRect(0, canvas.height / 2, 
+											canvas.width * battery.level, canvas.height);
+							context.font = fsize + 'px monospace';
+							context.strokeStyle = '#000';
+							context.fillStyle = battery.charging ? '#9F9' : '#F99';
+							context.strokeText(p,
+											canvas.width * 0.50 - context.measureText(p).width / 2,
+											canvas.height * 0.75 + fsize / 4);
+							context.fillText(p,
+											canvas.width * 0.50 - context.measureText(p).width / 2,
+											canvas.height * 0.75 + fsize / 4);
+							context.font = fsize * 0.75 + 'px monospace';
+							p = now.getHours() + ':' + now.getMinutes().toString().padStart(2, 0)
+											   + ':' + now.getSeconds().toString().padStart(2, 0);
+							context.strokeText(p,
+											canvas.width * 0.50 - context.measureText(p).width / 2,
+											canvas.height * 0.25 + fsize / 4);
+							context.fillText(p,
+											canvas.width * 0.50 - context.measureText(p).width / 2,
+											canvas.height * 0.25 + fsize / 4);
+							context.fillStyle = '#FFF';
+							context.fillRect(0, canvas.height / 2, canvas.width, 1);
+							requestAnimationFrame(updateBattery);
+						}
+						updateBattery();
+					});
+				};
+				// And wait for load
+				self.addEventListener('DOMContentLoaded', function() {
+					while(windows.length < 4)
+						windows.push(new DraggableTextarea('textarea_' + btoa(windows.length)));
+					for(var i = 0; i < windows.length; i++)
+						windows[i].show(self.document.body);
+					document.body.appendChild(canvas);
+					doDragCheck();
+				});
+				// then what? oh yeah
+				self.addEventListener('unload', function() {
+					for(var i = 0; i < windows.length; i++)
+						windows[i].forceSave();
+				});
+			})(this);
+		</script>
+	</head>
+</html>
